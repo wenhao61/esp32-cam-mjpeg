@@ -2,8 +2,10 @@
 #include "externs.h"
 #include "homeWifi.h"
 
+
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
 WebServer server(80);
 
@@ -66,6 +68,81 @@ void handleNotFound()
   message += server.args();
   message += "\n";
   server.send(200, "text / plain", message);
+}
+
+String sendCapturedImage2LineNotify(String token) {
+
+  token = myLineNotifyToken;
+
+  WiFiClientSecure client_tcp;
+  client_tcp.setInsecure();   //run version 1.0.5 or above
+  Serial.println("Connect to notify-api.line.me");
+  if (client_tcp.connect("notify-api.line.me", 443)) {
+    Serial.println("Connection successful");
+    
+    String message = "ESP32-CAM";
+    String head = "--Taiwan\r\nContent-Disposition: form-data; name=\"message\"; \r\n\r\n" + message + "\r\n--Taiwan\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
+    String tail = "\r\n--Taiwan--\r\n";
+
+    cam.run();
+    uint8_t *fbBuf = cam.getfb();
+    uint16_t imageLen = cam.getSize();
+    
+    uint16_t extraLen = head.length() + tail.length();
+    uint16_t totalLen = imageLen + extraLen;
+  
+    client_tcp.println("POST /api/notify HTTP/1.1");
+    client_tcp.println("Connection: close"); 
+    client_tcp.println("Host: notify-api.line.me");
+    client_tcp.println("Authorization: Bearer " + token);
+    client_tcp.println("Content-Length: " + String(totalLen));
+    client_tcp.println("Content-Type: multipart/form-data; boundary=Taiwan");
+    client_tcp.println();
+    client_tcp.print(head);
+    
+    
+    size_t fbLen = (size_t)imageLen;
+    for (size_t n=0;n<fbLen;n=n+1024) {
+      if (n+1024<fbLen) {
+        client_tcp.write(fbBuf, 1024);
+        fbBuf += 1024;
+      }
+      else if (fbLen%1024>0) {
+        size_t remainder = fbLen%1024;
+        client_tcp.write(fbBuf, remainder);
+      }
+    }  
+    
+    client_tcp.print(tail);
+
+    String getResponse="",Feedback="";
+    int waitTime = 10000;   // timeout 10 seconds
+    long startTime = millis();
+    boolean state = false;
+    
+    while ((startTime + waitTime) > millis()) {
+      Serial.print(".");
+      delay(100);      
+      while (client_tcp.available())  {
+          char c = client_tcp.read();
+          if (state==true) Feedback += String(c);        
+          if (c == '\n') {
+            if (getResponse.length()==0) state=true; 
+            getResponse = "";
+          } 
+          else if (c != '\r')
+            getResponse += String(c);
+          startTime = millis();
+       }
+       if (Feedback.length()>0) break;
+    }
+    Serial.println();
+    client_tcp.stop();
+    return Feedback;
+  }
+  else {
+    return "Connected to notify-api.line.me failed.";
+  }
 }
 
 void webInit()

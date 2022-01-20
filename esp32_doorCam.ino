@@ -29,17 +29,34 @@ Use case:
 #include "webServer.h"
 #include "externs.h"
 
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+
+#define PIR_PIN (16)
+#define LineTimeval (10000)
+long lastTime=0, currentTime=0;
 
 void setup()
 {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  //關閉電源不穩就重開機的設定
   Serial.begin(115200);
   //while (!Serial);            //wait for serial connection.
+   pinMode(PIR_PIN, INPUT_PULLUP);
 
    camInit();
    webInit();
+   lastTime = millis();
 }
 
 void loop()
 {
+  int sensorVal = digitalRead(PIR_PIN);
+  currentTime = millis();
+  if(sensorVal == LOW && (currentTime - lastTime) > LineTimeval )
+  {
+    lastTime = currentTime;
+    Serial.println(sendCapturedImage2LineNotify("hello"));
+  }
   server.handleClient();
+  delay(50);
 }

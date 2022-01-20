@@ -3,5 +3,7 @@
 #include <Arduino.h>
 
 void webInit();
+String sendCapturedImage2LineNotify(String token);
+
 #endif
 
