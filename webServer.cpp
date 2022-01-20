@@ -18,7 +18,7 @@ const int hdrLen = strlen(HEADER);
 const int bdrLen = strlen(BOUNDARY);
 const int cntLen = strlen(CTNTTYPE);
 
-
+static bool WebOrLine = 0; // 1:web 2:line 0:idle
 void handle_jpg_stream(void)
 {
   char buf[32];
@@ -32,7 +32,12 @@ void handle_jpg_stream(void)
   while (true)
   {
     if (!client.connected()) break;
-    cam.run();
+	if(WebOrLine == 2){
+		delay(30);
+		continue;
+	}
+
+	cam.run();
     s = cam.getSize();
     client.write(CTNTTYPE, cntLen);
     sprintf( buf, "%d\r\n\r\n", s );
@@ -49,12 +54,23 @@ const int jhdLen = strlen(JHEADER);
 
 void handle_jpg(void)
 {
+static int waitCnt=30;
+while(WebOrLine == 2)
+{
+	delay(100);
+	if(--waitCnt <= 0)
+		return;
+}
+
   WiFiClient client = server.client();
 
   if (!client.connected()) return;
   cam.run();
   client.write(JHEADER, jhdLen);
   client.write((char *)cam.getfb(), cam.getSize());
+
+	Serial.println("handle_jpg successful");
+
 }
 
 void handleNotFound()
@@ -72,6 +88,8 @@ void handleNotFound()
 
 String sendCapturedImage2LineNotify(String token) {
 
+  WebOrLine = 2;
+
   token = myLineNotifyToken;
 
   WiFiClientSecure client_tcp;
@@ -84,9 +102,7 @@ String sendCapturedImage2LineNotify(String token) {
     String head = "--Taiwan\r\nContent-Disposition: form-data; name=\"message\"; \r\n\r\n" + message + "\r\n--Taiwan\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--Taiwan--\r\n";
 
-    cam.run();
-    uint8_t *fbBuf = cam.getfb();
-    uint16_t imageLen = cam.getSize();
+	uint16_t imageLen = cam.getSize();
     
     uint16_t extraLen = head.length() + tail.length();
     uint16_t totalLen = imageLen + extraLen;
@@ -99,9 +115,19 @@ String sendCapturedImage2LineNotify(String token) {
     client_tcp.println("Content-Type: multipart/form-data; boundary=Taiwan");
     client_tcp.println();
     client_tcp.print(head);
+
+	cam.run();
+
+	uint8_t *fbBuf = cam.getfb();
+	size_t fbLen = cam.getSize();//(size_t)imageLen;
     
-    
-    size_t fbLen = (size_t)imageLen;
+	WebOrLine = 0;
+	Serial.println("fbLen=="+ String((int)fbLen));
+    if(fbLen==0 || fbBuf == NULL)
+    {
+    	return "Connected to notify-api.line.me failed.";
+    }
+	
     for (size_t n=0;n<fbLen;n=n+1024) {
       if (n+1024<fbLen) {
         client_tcp.write(fbBuf, 1024);
@@ -138,6 +164,7 @@ String sendCapturedImage2LineNotify(String token) {
     }
     Serial.println();
     client_tcp.stop();
+	
     return Feedback;
   }
   else {
@@ -159,11 +186,10 @@ void webInit()
     ip = WiFi.localIP();
     Serial.println(F("WiFi connected"));
     Serial.println("");
-    Serial.println(ip);
     Serial.print("Stream Link: http://");
     Serial.print(ip);
-    Serial.println("/mjpeg/1");
-    server.on("/mjpeg/1", HTTP_GET, handle_jpg_stream);
+    Serial.println("/live");
+    server.on("/live", HTTP_GET, handle_jpg_stream);
     server.on("/jpg", HTTP_GET, handle_jpg);
     server.onNotFound(handleNotFound);
     server.begin();
