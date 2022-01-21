@@ -19,6 +19,111 @@ const int bdrLen = strlen(BOUNDARY);
 const int cntLen = strlen(CTNTTYPE);
 
 static bool WebOrLine = 0; // 1:web 2:line 0:idle
+String myString;
+int res_dly=5;
+
+void parseCmd(String cmd)
+{
+  char sp[5][8]={};
+  int i=0,j=0, idx=0;
+  const char *strCmd = cmd.c_str();
+  for(i=0;i<cmd.length();i++)
+  {
+    if(strCmd[i]==' ')
+    {
+      j=0;
+      idx++;
+      if(idx>=5)
+        break;
+    }
+    else{
+      if(j<8){
+        sp[idx][j++]=strCmd[i];
+      }
+    } 
+  }
+  for(i=0;i<=idx;i++)
+  {
+    Serial.println(sp[i]);
+  }
+  if(memcmp(sp[0],"line", 4) == 0)
+  {
+  	sendCapturedImage2LineNotify("hello");
+  }
+  else if(memcmp(sp[0],"dly", 3) == 0)
+  {
+  	res_dly = strtol(sp[1],NULL,10);
+    if(res_dly < 0)  res_dly = 0;
+  }
+  else if(memcmp(sp[0],"led", 3) == 0)
+  {
+    if(memcmp(sp[1],"1", 1) == 0)
+	    ledcWrite(4,10);
+    else 
+        ledcWrite(4,0);
+  }
+    else if(memcmp(sp[0],"bri", 3) == 0)
+    {
+        int val = strtol(sp[1],NULL,10);
+        if(val >2 || val < -2)
+            val = 0;
+        imgSensor->set_brightness(imgSensor,val);
+    }
+    else if(memcmp(sp[0],"sat", 3) == 0)
+    {
+        int val = strtol(sp[1],NULL,10);
+        if(val >2 || val < -2)
+            val = 0;
+        imgSensor->set_saturation(imgSensor,val);
+    }
+    else if(memcmp(sp[0],"cst", 3) == 0)
+    {
+        int val = strtol(sp[1],NULL,10);
+        if(val >2 || val < -2)
+            val = 0;
+        imgSensor->set_contrast(imgSensor,val);
+    }
+
+    else if(memcmp(sp[0],"res", 3) == 0)
+    {
+      if(memcmp(sp[1],"vga", 3) == 0){
+        imgSensor->set_framesize(imgSensor, FRAMESIZE_VGA);
+        //imgSensor->set_framerate(imgSensor, FRAMERATE_15FPS);
+        }
+      else if(memcmp(sp[1],"svga", 4) == 0){
+        imgSensor->set_framesize(imgSensor, FRAMESIZE_SVGA);
+        //imgSensor->set_framerate(imgSensor, FRAMERATE_8FPS);
+        }
+      else
+        {
+        imgSensor->set_framesize(imgSensor, FRAMESIZE_QVGA);
+        //imgSensor->set_framerate(imgSensor, FRAMERATE_30FPS);
+        }
+      //cam.setCameraConfig();
+    }
+
+}
+
+
+void listSerialPort(void)
+{
+    while (Serial.available()) {
+        char c = Serial.read();
+        if(c!='\n'){
+            myString += c;
+        }
+        delay(5);    // 沒有延遲的話 UART 串口速度會跟不上Arduino的速度，會導致資料不完整
+    }
+    
+    if(myString.length()>0)
+    {
+        parseCmd(myString);
+        Serial.println(myString);
+        myString="";
+    }
+
+}
+
 void handle_jpg_stream(void)
 {
   char buf[32];
@@ -29,9 +134,14 @@ void handle_jpg_stream(void)
   client.write(HEADER, hdrLen);
   client.write(BOUNDARY, bdrLen);
 
+  uint8_t *fbBuf = NULL;
+
   while (true)
   {
     if (!client.connected()) break;
+    delay(res_dly);
+    listSerialPort();
+    
 	if(WebOrLine == 2){
 		delay(30);
 		continue;
@@ -39,10 +149,13 @@ void handle_jpg_stream(void)
 
 	cam.run();
     s = cam.getSize();
+    
+    uint8_t *ffBuf=cam.getfb();
     client.write(CTNTTYPE, cntLen);
     sprintf( buf, "%d\r\n\r\n", s );
     client.write(buf, strlen(buf));
-    client.write((char *)cam.getfb(), s);
+    client.write((char *)ffBuf, s);    
+
     client.write(BOUNDARY, bdrLen);
   }
 }
@@ -69,7 +182,7 @@ while(WebOrLine == 2)
   client.write(JHEADER, jhdLen);
   client.write((char *)cam.getfb(), cam.getSize());
 
-	Serial.println("handle_jpg successful");
+Serial.println("handle_jpg successful");
 
 }
 
@@ -102,11 +215,15 @@ String sendCapturedImage2LineNotify(String token) {
     String head = "--Taiwan\r\nContent-Disposition: form-data; name=\"message\"; \r\n\r\n" + message + "\r\n--Taiwan\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--Taiwan--\r\n";
 
+    cam.run();
+    uint8_t *fbBuf = cam.getfb();
 	uint16_t imageLen = cam.getSize();
-    
+     if(fbBuf)
+        Serial.println("Connection successful, image size = "+ String((int)imageLen));
+     
     uint16_t extraLen = head.length() + tail.length();
     uint16_t totalLen = imageLen + extraLen;
-  
+   
     client_tcp.println("POST /api/notify HTTP/1.1");
     client_tcp.println("Connection: close"); 
     client_tcp.println("Host: notify-api.line.me");
@@ -115,20 +232,19 @@ String sendCapturedImage2LineNotify(String token) {
     client_tcp.println("Content-Type: multipart/form-data; boundary=Taiwan");
     client_tcp.println();
     client_tcp.print(head);
+    
 
-	cam.run();
-
-	uint8_t *fbBuf = cam.getfb();
-	size_t fbLen = cam.getSize();//(size_t)imageLen;
+	size_t fbLen = (size_t)imageLen;
     
 	WebOrLine = 0;
-	Serial.println("fbLen=="+ String((int)fbLen));
+
     if(fbLen==0 || fbBuf == NULL)
     {
     	return "Connected to notify-api.line.me failed.";
     }
 	
     for (size_t n=0;n<fbLen;n=n+1024) {
+      Serial.print("@");
       if (n+1024<fbLen) {
         client_tcp.write(fbBuf, 1024);
         fbBuf += 1024;
@@ -138,8 +254,10 @@ String sendCapturedImage2LineNotify(String token) {
         client_tcp.write(fbBuf, remainder);
       }
     }  
+    Serial.println();
     
     client_tcp.print(tail);
+    Serial.println("Connection successful, image size = "+ String((int)fbLen));
 
     String getResponse="",Feedback="";
     int waitTime = 10000;   // timeout 10 seconds

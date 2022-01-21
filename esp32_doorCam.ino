@@ -37,63 +37,6 @@ Use case:
 long lastTime=0, currentTime=0;
 
 
-void parseCmd(String cmd)
-{
-  char sp[5][8]={};
-  int i=0,j=0, idx=0;
-  const char *strCmd = cmd.c_str();
-  for(i=0;i<cmd.length();i++)
-  {
-    if(strCmd[i]==' ')
-    {
-      j=0;
-      idx++;
-      if(idx>=5)
-        break;
-    }
-    else{
-      if(j<8){
-        sp[idx][j++]=strCmd[i];
-      }
-    } 
-  }
-  for(i=0;i<=idx;i++)
-  {
-    Serial.println(sp[i]);
-  }
-  if(memcmp(sp[0],"help", 4) == 0)
-  {
-  	sendCapturedImage2LineNotify("hello");
-  }
-  else if(memcmp(sp[0],"on", 2) == 0)
-  {
-  //	digitalWrite(4,HIGH);
-	ledcWrite(4,10);
-  }
-    else if(memcmp(sp[0],"off", 3) == 0)
-  {
-  	//digitalWrite(4,LOW);
-	ledcWrite(4,0);
-  }
-#if 0
-  if(String(sp[0]) == "help")
-  {
-  	sendCapturedImage2LineNotify("hello");
-  }
-  else if(String(sp[0]) == "led")
-  {
-  	if(String(sp[1]) == "on")
-  		digitalWrite(4,HIGH);
-	else
-		digitalWrite(4,LOW);
-  }	
-  else
-  {
-  	Serial.println("##### " + sp[0]);
-  }
-#endif
-}
-
 
 
 void setup()
@@ -116,7 +59,7 @@ void setup()
    lastTime = millis();
 }
 
-String myString;
+
 
 void loop()
 {
@@ -128,22 +71,8 @@ void loop()
     sendCapturedImage2LineNotify("hello");
   }
 
-  while (Serial.available()) {
-	  char c = Serial.read();
-	  if(c!='\n'){
-		  myString += c;
-	  }
-	  delay(5);    // 沒有延遲的話 UART 串口速度會跟不上Arduino的速度，會導致資料不完整
-  }
-  
-  if(myString.length()>0)
-  {
-	  parseCmd(myString);
-	  Serial.println(myString);
-	  myString="";
-  }
+    listSerialPort();
 
-  
   server.handleClient();
   delay(50);
 }

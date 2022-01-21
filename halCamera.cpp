@@ -1,6 +1,7 @@
 #include "halCamera.h"
 
 OV2640 cam;
+sensor_t * imgSensor;
 
 
 void camInit()
@@ -29,7 +30,7 @@ void camInit()
     
       // Frame parameters
       //  config.frame_size = FRAMESIZE_UXGA;
-      config.frame_size = FRAMESIZE_QVGA;
+      config.frame_size = FRAMESIZE_VGA;
       config.jpeg_quality = 12;
       config.fb_count = 2;
     
@@ -39,6 +40,6 @@ void camInit()
 #endif
     
       cam.init(config);
-
+      imgSensor=esp_camera_sensor_get();
 }
 

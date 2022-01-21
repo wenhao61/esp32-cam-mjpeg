@@ -5,6 +5,8 @@
 #include <WebServer.h>
 
 extern OV2640 cam;
+extern sensor_t *imgSensor;
+
 extern WebServer server;
 
 #endif

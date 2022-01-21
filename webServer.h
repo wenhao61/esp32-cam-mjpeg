@@ -4,6 +4,6 @@
 
 void webInit();
 String sendCapturedImage2LineNotify(String token);
-
+void listSerialPort(void);
 #endif
 
