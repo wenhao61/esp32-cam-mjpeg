@@ -32,7 +32,7 @@ Use case:
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
-#define PIR_PIN (16)
+#define PIR_PIN (12)
 #define LineTimeval (10000)
 long lastTime=0, currentTime=0;
 

@@ -216,6 +216,7 @@ String sendCapturedImage2LineNotify(String token) {
     String tail = "\r\n--Taiwan--\r\n";
 
     cam.run();
+	cam.run();
     uint8_t *fbBuf = cam.getfb();
 	uint16_t imageLen = cam.getSize();
      if(fbBuf)
